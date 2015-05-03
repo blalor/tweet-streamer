@@ -10,6 +10,7 @@ import (
 
 	"encoding/json"
 	"github.com/ChimeraCoder/anaconda"
+	"github.com/belogik/goes"
 	"net/url"
 	"strconv"
 	"time"
@@ -18,13 +19,17 @@ import (
 var version string = "undef"
 
 type Options struct {
-	Debug          bool   `env:"DEBUG"    long:"debug"    description:"enable debug"`
-	LogFile        string `env:"LOG_FILE" long:"log-file" description:"path to JSON log file"`
+	Debug   bool   `env:"DEBUG"    long:"debug"    description:"enable debug"`
+	LogFile string `env:"LOG_FILE" long:"log-file" description:"path to JSON log file"`
+
 	ConsumerKey    string `               long:"consumer-key"    required:"true"`
 	ConsumerSecret string `               long:"consumer-secret" required:"true"`
 	AccessToken    string `               long:"access-token"    required:"true"`
 	AccessSecret   string `               long:"access-secret"   required:"true"`
 	Since          int64  `               long:"since"    description:"backfill tweets since this id"`
+
+	ESHost string `long:"es-host" required:"true"`
+	ESPort string `long:"es-port" required:"true"` // *string*?!
 }
 
 type loggerAdapter struct {
@@ -141,6 +146,8 @@ func main() {
 
 	twitter.SetLogger(loggerAdapter{log.WithField("component", "anaconda")})
 
+	elasticsearch := goes.NewConnection(opts.ESHost, opts.ESPort)
+
 	tweetChan := make(chan anaconda.Tweet)
 
 	go func() {
@@ -248,6 +255,15 @@ func main() {
 
 			data, _ := json.MarshalIndent(esTweet, "", "    ")
 			println(string(data))
+
+			_, err = elasticsearch.Index(goes.Document{
+				Index:  "twitter",
+				Type:   "tweet",
+				Id:     strconv.FormatInt(esTweet.Id, 10),
+				Fields: esTweet,
+			}, nil)
+
+			checkError("unable to index tweet", err)
 		}
 	}()
 

@@ -5,6 +5,7 @@
 github.com/jessevdk/go-flags     15347ef417a300349807983f15af9e65cd2e1b3a
 github.com/Sirupsen/logrus       539d4dc034c079a7188b5d4ca9650632d73c66e8
 github.com/ChimeraCoder/anaconda 43c8983871857d9851044eacc0e60785ad11d123
+github.com/belogik/goes          86be27b62708c5b6773d5ece0c5841db2f1e75b9
 
 ## test
 github.com/onsi/ginkgo/ginkgo 17ea479729ee427265ac1e913443018350946ddf

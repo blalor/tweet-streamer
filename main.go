@@ -74,7 +74,6 @@ type InReplyTo struct {
 	Id   int64
 }
 
-// @todo
 type Media struct {
 	Id   int64
 	Type string
@@ -138,9 +137,9 @@ func main() {
 
 	anaconda.SetConsumerKey(opts.ConsumerKey)
 	anaconda.SetConsumerSecret(opts.ConsumerSecret)
-	api := anaconda.NewTwitterApi(opts.AccessToken, opts.AccessSecret)
+	twitter := anaconda.NewTwitterApi(opts.AccessToken, opts.AccessSecret)
 
-	api.SetLogger(loggerAdapter{log.WithField("component", "anaconda")})
+	twitter.SetLogger(loggerAdapter{log.WithField("component", "anaconda")})
 
 	tweetChan := make(chan anaconda.Tweet)
 
@@ -191,9 +190,12 @@ func main() {
 				esTweet.UserMentions = make([]User, len(t.Entities.User_mentions))
 
 				for i, um := range t.Entities.User_mentions {
+					// need to assign to a local variable, or the names are
+					// wrong for multiple mentions.
+					name := um.Name
 					esTweet.UserMentions[i] = User{
 						Id:         um.Id,
-						Name:       &um.Name,
+						Name:       &name,
 						ScreenName: um.Screen_name,
 					}
 				}
@@ -230,7 +232,18 @@ func main() {
 					Id: t.InReplyToStatusID,
 				}
 
-				// @todo retrieve replied-to tweet
+				log.Debugf("retrieving target tweet %d is in reply to", t.InReplyToStatusID)
+				target, err := twitter.GetTweet(t.InReplyToStatusID, nil)
+				if err != nil {
+					log.Warnf("unable to the tweet %d is in reply to: %v", t.InReplyToStatusID, err)
+				} else {
+					// need to dispatch in a goroutine or we'll block because we
+					// can't write to the same channel we're reading from
+					go func() {
+						tweetChan <- target
+						log.Debugf("dispatched replied-to tweet %d", target.Id)
+					}()
+				}
 			}
 
 			data, _ := json.MarshalIndent(esTweet, "", "    ")
@@ -242,7 +255,7 @@ func main() {
 		v := url.Values{}
 		v.Set("count", strconv.FormatInt(200, 10)) // max allowed for a single request
 		v.Set("since_id", strconv.FormatInt(opts.Since, 10))
-		tweets, err := api.GetHomeTimeline(v)
+		tweets, err := twitter.GetHomeTimeline(v)
 
 		checkError("unable to get home timeline", err)
 
@@ -252,12 +265,12 @@ func main() {
 	}
 
 	// start consuming the stream
-	stream := api.UserStream(nil)
+	stream := twitter.UserStream(nil)
 
 	for streamObj := range stream.C {
 		switch t := streamObj.(type) {
 		default:
-			log.Warnf("unhandled type %T: %+v", t, streamObj)
+			log.Warnf("unhandled type %T", t)
 		case anaconda.Tweet:
 			tweetChan <- streamObj.(anaconda.Tweet)
 		}

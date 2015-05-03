@@ -1,0 +1,23 @@
+## Go deps, managed by https://github.com/pote/gpm
+## These are a few of my favorite things.
+
+## prod
+github.com/jessevdk/go-flags     15347ef417a300349807983f15af9e65cd2e1b3a
+github.com/Sirupsen/logrus       539d4dc034c079a7188b5d4ca9650632d73c66e8
+github.com/ChimeraCoder/anaconda 43c8983871857d9851044eacc0e60785ad11d123
+
+## test
+github.com/onsi/ginkgo/ginkgo 17ea479729ee427265ac1e913443018350946ddf
+github.com/onsi/gomega        8adf9e1730c55cdc590de7d49766cb2acc88d8f2
+github.com/stretchr/testify   33a31e5dbed8302d5ab7e6d12b416e95c2c4ebc0
+
+## test codegen
+github.com/vektra/mockery 78e40f1402858198c4d99ff25a7bf6f1ad66fd96
+
+### transitive deps
+## required by mockery, I think
+github.com/vektra/errors   c64d83aba85aa4392895aadeefabbd24e89f3580
+golang.org/x/tools/imports 39a2d013becdcfa6c1c320818544e27af68cea4c
+
+## required by testify, I think
+github.com/stretchr/objx cbeaeb16a013161a98496fad62933b1d21786672

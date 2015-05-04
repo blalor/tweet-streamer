@@ -71,7 +71,7 @@ type RetweetMeta struct {
 	By *User
 	// time a retweeted tweet was originally created
 	OriginalCreatedTime time.Time
-	OriginalId          int64
+	OriginalId          string
 }
 
 type InReplyTo struct {
@@ -87,7 +87,7 @@ type Media struct {
 
 // if a retweet, contents of retweeted_status, else the main tweet (except for RetweetedBy)
 type ElasticSearchTweet struct {
-	Id int64 `json:"id"`
+	Id string `json:"id"`
 	// time tweet appeared in our timeline
 	CreatedTime time.Time `json:"@timestamp"`
 	User        User      `json:"user"`
@@ -106,6 +106,7 @@ type ElasticSearchTweet struct {
 	InReplyTo *InReplyTo `json:"in_reply_to,omitempty"`
 
 	Retweeted *RetweetMeta `json:"retweeted,omitempty"`
+	Favorited bool         `json:"favorited"`
 }
 
 func main() {
@@ -154,8 +155,8 @@ func main() {
 		for t := range tweetChan {
 			esTweet := ElasticSearchTweet{}
 
-			esTweet.Id = t.Id
-
+			esTweet.Id = t.IdStr
+			esTweet.Favorited = t.Favorited
 			createdTime, err := t.CreatedAtTime()
 			if err != nil {
 				log.Errorf("unable to parse time '%s': %s", t.CreatedAt, err)
@@ -176,7 +177,7 @@ func main() {
 				esTweet.Retweeted = &RetweetMeta{
 					By:                  &u,
 					OriginalCreatedTime: origCreatedTime,
-					OriginalId:          t.RetweetedStatus.Id,
+					OriginalId:          t.RetweetedStatus.IdStr,
 				}
 
 				t = *t.RetweetedStatus
@@ -257,9 +258,9 @@ func main() {
 			println(string(data))
 
 			_, err = elasticsearch.Index(goes.Document{
-				Index:  "twitter",
+				Index:  "twitter-" + esTweet.CreatedTime.Format("2006.01.02"),
 				Type:   "tweet",
-				Id:     strconv.FormatInt(esTweet.Id, 10),
+				Id:     esTweet.Id,
 				Fields: esTweet,
 			}, nil)
 
@@ -289,6 +290,20 @@ func main() {
 			log.Warnf("unhandled type %T", t)
 		case anaconda.Tweet:
 			tweetChan <- streamObj.(anaconda.Tweet)
+		case anaconda.EventTweet:
+			// (un)favorite, or others
+			// hrm. the TargetObject's "favorite" property doesn't reflect the
+			// change here.
+			switch t.Event.Event {
+			default:
+				log.Warnf("unhandled event '%s'", t.Event)
+			case "favorite":
+				t.TargetObject.Favorited = true
+			case "unfavorite":
+				t.TargetObject.Favorited = false
+			}
+
+			tweetChan <- *t.TargetObject
 		}
 	}
 }

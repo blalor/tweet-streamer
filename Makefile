@@ -1,5 +1,5 @@
 ## the publicly-visible name of your binary
-NAME=tweet-streamer
+NAME=elastic-tweeter
 
 ## the go-get'able path
 PKG_PATH=github.com/blalor/$(NAME)

@@ -2,7 +2,7 @@ package tweet_indexer
 
 import (
     "time"
-    
+
     log "github.com/Sirupsen/logrus"
 
     "github.com/belogik/goes"
@@ -85,23 +85,23 @@ func (self *TweetIndexer) Index(tweet anaconda.Tweet) {
 }
 
 func (self *TweetIndexer) UpdateFavorite(tweet *anaconda.Tweet, favorited bool) {
-    query := map[string]interface{} {
-        "query": map[string]interface{} {
-            "filtered": map[string]interface{} {
-                "query": map[string]interface{} {
-                    "match_all": map[string]interface{} {},
+    query := map[string]interface{}{
+        "query": map[string]interface{}{
+            "filtered": map[string]interface{}{
+                "query": map[string]interface{}{
+                    "match_all": map[string]interface{}{},
                 },
-                "filter": map[string]interface{} {
-                    "or": []map[string]interface{} {
-                        map[string]interface{} {
-                            "ids": map[string]interface{} {
+                "filter": map[string]interface{}{
+                    "or": []map[string]interface{}{
+                        map[string]interface{}{
+                            "ids": map[string]interface{}{
                                 "values": []string{
                                     tweet.IdStr,
                                 },
                             },
                         },
-                        map[string]interface{} {
-                            "term": map[string]interface{} {
+                        map[string]interface{}{
+                            "term": map[string]interface{}{
                                 "retweeted.OriginalId": tweet.IdStr,
                             },
                         },
@@ -110,21 +110,21 @@ func (self *TweetIndexer) UpdateFavorite(tweet *anaconda.Tweet, favorited bool) 
             },
         },
     }
-    
+
     results, err := self.es.Search(query, []string{"twitter-*"}, []string{"tweet"}, nil)
     if err != nil {
         log.Errorf("error searching for tweet in ES with id %s: %s", tweet.IdStr, err)
         return
     }
-    
+
     if results.Hits.Total == 0 {
         // hm, we haven't seen this tweet before
         log.Debugf("no tweet found in ES with id %s", tweet.IdStr)
-        
+
         // the TargetObject's "favorite" property doesn't reflect the change
         // here.
         tweet.Favorited = favorited
-        
+
         self.tweetChan <- *tweet
     } else if results.Hits.Total != 1 {
         log.Errorf("found %d tweets in ES for id %s, expected one", results.Hits.Total, tweet.IdStr)
@@ -133,21 +133,21 @@ func (self *TweetIndexer) UpdateFavorite(tweet *anaconda.Tweet, favorited bool) 
         hit := results.Hits.Hits[0]
 
         log.Debugf("updating favorited of %s to %t", hit.Id, favorited)
-        
+
         _, err = self.es.Update(
             goes.Document{
-                Index:  hit.Index,
-                Type:   hit.Type,
-                Id:     hit.Id,
+                Index: hit.Index,
+                Type:  hit.Type,
+                Id:    hit.Id,
             },
-            map[string]interface{} {
-                "doc": map[string]bool {
+            map[string]interface{}{
+                "doc": map[string]bool{
                     "favorited": favorited,
                 },
             },
             nil,
         )
-        
+
         if err != nil {
             log.Errorf("unable to update favorited of %s: %s", hit.Id, err)
         }

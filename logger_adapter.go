@@ -21,4 +21,3 @@ func (self loggerAdapter) Notice(args ...interface{}) {
 func (self loggerAdapter) Noticef(format string, args ...interface{}) {
     self.Infof(format, args)
 }
-

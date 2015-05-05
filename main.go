@@ -8,7 +8,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	flags "github.com/jessevdk/go-flags"
 
-	"encoding/json"
 	"github.com/ChimeraCoder/anaconda"
 	"github.com/belogik/goes"
 	"net/url"
@@ -254,9 +253,6 @@ func main() {
 				}
 			}
 
-			data, _ := json.MarshalIndent(esTweet, "", "    ")
-			println(string(data))
-
 			_, err = elasticsearch.Index(goes.Document{
 				Index:  "twitter-" + esTweet.CreatedTime.Format("2006.01.02"),
 				Type:   "tweet",
@@ -268,6 +264,76 @@ func main() {
 		}
 	}()
 
+	updateFavorite := func(tweet *anaconda.Tweet, favorited bool) {
+		query := map[string]interface{} {
+		    "query": map[string]interface{} {
+		        "filtered": map[string]interface{} {
+		            "query": map[string]interface{} {
+		                "match_all": map[string]interface{} {},
+		            },
+		            "filter": map[string]interface{} {
+		                "or": []map[string]interface{} {
+		                    map[string]interface{} {
+		                        "ids": map[string]interface{} {
+		                            "values": []string{
+		                                tweet.IdStr,
+		                            },
+		                        },
+		                    },
+		                    map[string]interface{} {
+		                        "term": map[string]interface{} {
+		                            "retweeted.OriginalId": tweet.IdStr,
+		                        },
+		                    },
+		                },
+		            },
+		        },
+		    },
+		}
+		
+		results, err := elasticsearch.Search(query, []string{"twitter-*"}, []string{"tweet"}, nil)
+		if err != nil {
+			log.Errorf("error searching for tweet in ES with id %s: %s", tweet.IdStr, err)
+			return
+		}
+		
+		if results.Hits.Total == 0 {
+			// hm, we haven't seen this tweet before
+			log.Debugf("no tweet found in ES with id %s", tweet.IdStr)
+			
+			// the TargetObject's "favorite" property doesn't reflect the change
+			// here.
+			tweet.Favorited = favorited
+			
+			tweetChan <- *tweet
+		} else if results.Hits.Total != 1 {
+			log.Errorf("found %d tweets in ES for id %s, expected one", results.Hits.Total, tweet.IdStr)
+		} else {
+			// found one document in ES, as expected; just update it
+			hit := results.Hits.Hits[0]
+
+			log.Debugf("updating favorited of %s to %t", hit.Id, favorited)
+			
+			_, err = elasticsearch.Update(
+				goes.Document{
+					Index:  hit.Index,
+					Type:   hit.Type,
+					Id:     hit.Id,
+				},
+				map[string]interface{} {
+					"doc": map[string]bool {
+						"favorited": favorited,
+					},
+				},
+				nil,
+			)
+			
+			if err != nil {
+				log.Errorf("unable to update favorited of %s: %s", hit.Id, err)
+			}
+		}
+	}
+	
 	if opts.Since > 0 {
 		v := url.Values{}
 		v.Set("count", strconv.FormatInt(200, 10)) // max allowed for a single request
@@ -292,18 +358,14 @@ func main() {
 			tweetChan <- streamObj.(anaconda.Tweet)
 		case anaconda.EventTweet:
 			// (un)favorite, or others
-			// hrm. the TargetObject's "favorite" property doesn't reflect the
-			// change here.
 			switch t.Event.Event {
 			default:
 				log.Warnf("unhandled event '%s'", t.Event)
 			case "favorite":
-				t.TargetObject.Favorited = true
+				updateFavorite(t.TargetObject, true)
 			case "unfavorite":
-				t.TargetObject.Favorited = false
+				updateFavorite(t.TargetObject, false)
 			}
-
-			tweetChan <- *t.TargetObject
 		}
 	}
 }

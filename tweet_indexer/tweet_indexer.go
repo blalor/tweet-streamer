@@ -49,8 +49,8 @@ type ElasticSearchTweet struct {
     CreatedTime time.Time `json:"@timestamp"`
     User        User      `json:"user"`
 
-    // with URLs expanded; so will not honor 140 chars
-    Text string
+    // with URLs expanded (eventually); so will not honor 140 chars
+    Text string `json:"text"`
 
     Coordinates *anaconda.Coordinates `json:"coordinates,omitempty"`
 
